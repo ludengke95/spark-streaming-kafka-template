@@ -3,8 +3,10 @@ package com.opensharing.bigdata.template.streamingkafka;
 import cn.hutool.log.StaticLog;
 import com.opensharing.bigdata.factory.SparkFactory;
 import com.opensharing.bigdata.factory.ZookeeperFactory;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.SparkConf;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.Durations;
@@ -38,10 +40,17 @@ public abstract class SparkStreamingKafkaTemplate {
      */
     private JavaStreamingContext javaStreamingContext;
 
+    /**
+     * kafka配置
+     */
     private Map<String, Object> kafkaConfMap;
 
     private static final String CONSUMER_TOPIC_NAME = "";
+
     private String OFFSET_DIR = "";
+
+    private final static OffsetStore DefaultOffsetStore = OffsetStore.KAFKA;
+    private OffsetStore offsetStore = DefaultOffsetStore;
 
     /**
      * 模板初始化函数
@@ -66,9 +75,9 @@ public abstract class SparkStreamingKafkaTemplate {
      *  4.kryo_classes ：{arr(Class数组)，非必须}
      *  ......与SparkConf一致，仅对1,2做检剩余的属性不做检查
      * @param sparkConfMap 需要设置的SparkConf属性和必须属性
-     * @param
+     * @param kafkaConfMap kafka的基本配置
      */
-    protected void init(Map<String,Object> sparkConfMap,Map<String,Object> kafkaConfMap){
+    protected void init(Map<Object,Object> sparkConfMap,Map<String,Object> kafkaConfMap){
         SparkConf sparkConf = createSparkConf(sparkConfMap);
         if (sparkConfMap.containsKey(TemplateConf.APP_NAME)){
             sparkConf.setAppName(sparkConfMap.get(TemplateConf.APP_NAME).toString());
@@ -80,9 +89,35 @@ public abstract class SparkStreamingKafkaTemplate {
             sparkConf.registerKryoClasses((Class<?>[]) sparkConfMap.get(TemplateConf.KRYO_CLASSES));
         }
         Duration duration = sparkConfMap.containsKey(TemplateConf.DURATION)? (Duration) sparkConfMap.get(TemplateConf.DURATION) :Durations.seconds(10);
-        JavaStreamingContext sc = new JavaStreamingContext(sparkConf, duration);
-        this.javaStreamingContext = sc;
+        this.javaStreamingContext = new JavaStreamingContext(sparkConf, duration);
         this.kafkaConfMap = kafkaConfMap;
+    }
+
+    /**
+     * 设置offset的存储方式
+     * @param offsetStore offset的存储方式，使用模板中的枚举类
+     */
+    private void setOffsetStore(OffsetStore offsetStore){
+        this.offsetStore = offsetStore;
+    }
+
+    /**
+     * 预处理kafka配置
+     * eg:
+     *      1. 如果不设置消费者提交方式，默认设置为手动提交
+     *      2. 不设置key.deserializer和value.deserializer,默认设置为StringDeserializer
+     * @param kafkaConfMap kafka基本设置
+     */
+    private void defaultKafkaConf(Map<String,Object> kafkaConfMap){
+        if(!kafkaConfMap.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)){
+            kafkaConfMap.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,false);
+        }
+        if(!kafkaConfMap.containsKey(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG)){
+            kafkaConfMap.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        }
+        if(!kafkaConfMap.containsKey(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG)){
+            kafkaConfMap.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        }
     }
 
     /**
@@ -97,46 +132,17 @@ public abstract class SparkStreamingKafkaTemplate {
      * 需要剔除自定义的配置，剩余的配置写入SparkConf
      * @return SparkConf
      */
-    private SparkConf createSparkConf(Map<String,Object> map){
-        Map<String,String> tmp = new HashMap(16);
+    private SparkConf createSparkConf(Map<Object,Object> map){
+        HashMap<String,String> tmp = new HashMap<>(16);
         map.forEach((key,value)->{
             List<TemplateConf> templateConf = Arrays.asList(TemplateConf.values());
-            if(!templateConf.contains(key)){
-                tmp.put(key,value.toString());
+            if(!templateConf.contains(TemplateConf.fromValue(key.toString()))){
+                tmp.put(key.toString(),value.toString());
             }
         });
         SparkConf sparkConf = SparkFactory.getDefaultSparkConf();
-        tmp.forEach((key,value)->{
-            sparkConf.set(key,value);
-        });
+        tmp.forEach(sparkConf::set);
         return sparkConf;
-    }
-
-    /**
-     * 模板配置枚举类
-     */
-    public enum TemplateConf {
-        APP_NAME("app_name"), DURATION("duration"), MASTER("master"),KRYO_CLASSES("kryo_classes");
-
-        private TemplateConf(String value) {
-            this.value = value;
-        }
-
-        private String value;
-
-        String getValue() {
-            return value;
-        }
-
-        public static TemplateConf fromValue(String value) {
-            for (TemplateConf templateConf : TemplateConf.values()) {
-                if (templateConf.getValue().equals(value)) {
-                    return templateConf;
-                }
-            }
-            //default value
-            return null;
-        }
     }
 
     private void work() {
@@ -147,18 +153,25 @@ public abstract class SparkStreamingKafkaTemplate {
         // Kafka 中的一条数据
         JavaDStream<String> lines = stream.map(ConsumerRecord::value);
         this.handle(lines);
+
         // 更新存储在 Zookeeper中的偏移量
-        stream.foreachRDD(rdd -> {
-            OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
-            for (OffsetRange o : offsetRanges) {
-                ZookeeperFactory.getZkUtils().updatePersistentPath(
-                        String.join("/", OFFSET_DIR, String.valueOf(o.partition())),
-                        String.valueOf(o.untilOffset()),
-                        ZookeeperFactory.getZkUtils().defaultAcls(String.join("/", OFFSET_DIR, String.valueOf(o.partition())))
-                );
-                StaticLog.info("UPDATE OFFSET WITH [ topic :" + o.topic() + " partition :" + o.partition() + " offset :" + o.fromOffset() + " ~ " + o.untilOffset() + " ]");
-            }
-        });
+        switch (this.offsetStore){
+            case ZOOKEEPER:
+                stream.foreachRDD(rdd -> {
+                    OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
+                    for (OffsetRange o : offsetRanges) {
+                        ZookeeperFactory.getZkUtils().updatePersistentPath(
+                                String.join("/", OFFSET_DIR, String.valueOf(o.partition())),
+                                String.valueOf(o.untilOffset()),
+                                ZookeeperFactory.getZkUtils().defaultAcls(String.join("/", OFFSET_DIR, String.valueOf(o.partition())))
+                        );
+                        StaticLog.info("UPDATE OFFSET WITH [ topic :" + o.topic() + " partition :" + o.partition() + " offset :" + o.fromOffset() + " ~ " + o.untilOffset() + " ]");
+                    }
+                });
+                break;
+            case KAFKA:break;
+            case MYSQL:break;
+        }
     }
 
     protected abstract void handle(JavaDStream<String> lines);
@@ -185,7 +198,7 @@ public abstract class SparkStreamingKafkaTemplate {
             return KafkaUtils.createDirectStream(
                     javaStreamingContext,
                     LocationStrategies.PreferConsistent(),
-                    ConsumerStrategies.<String, String>Assign(fromOffsets.keySet(), kafkaConfMap, fromOffsets)
+                    ConsumerStrategies.Assign(fromOffsets.keySet(), kafkaConfMap, fromOffsets)
             );
         } else {
             // Zookeeper内没有存储偏移量 使用默认的偏移量创建Streaming
@@ -195,6 +208,60 @@ public abstract class SparkStreamingKafkaTemplate {
                     LocationStrategies.PreferConsistent(),
                     ConsumerStrategies.Subscribe(Collections.singleton(CONSUMER_TOPIC_NAME), kafkaConfMap)
             );
+        }
+    }
+
+    /**
+     * 模板配置枚举类
+     */
+    public enum TemplateConf {
+        APP_NAME("app_name"), DURATION("duration"), MASTER("master"),KRYO_CLASSES("kryo_classes");
+
+        TemplateConf(String value) {
+            this.value = value;
+        }
+
+        private String value;
+
+        String getValue() {
+            return value;
+        }
+
+        public static TemplateConf fromValue(String value) {
+            for (TemplateConf templateConf : TemplateConf.values()) {
+                if (templateConf.getValue().equals(value)) {
+                    return templateConf;
+                }
+            }
+            //default value
+            return null;
+        }
+    }
+
+    /**
+     * offset存储方式枚举类
+     */
+    public enum OffsetStore {
+        KAFKA("kafka"), ZOOKEEPER("duration"), MYSQL("mysql");
+
+        OffsetStore(String value) {
+            this.value = value;
+        }
+
+        private String value;
+
+        String getValue() {
+            return value;
+        }
+
+        public static OffsetStore fromValue(String value) {
+            for (OffsetStore offsetStore : OffsetStore.values()) {
+                if (offsetStore.getValue().equals(value)) {
+                    return offsetStore;
+                }
+            }
+            //default value
+            return null;
         }
     }
 }
