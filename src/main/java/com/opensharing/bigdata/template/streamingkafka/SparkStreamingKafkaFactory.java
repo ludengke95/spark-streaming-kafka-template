@@ -1,13 +1,19 @@
 package com.opensharing.bigdata.template.streamingkafka;
 
+import cn.hutool.db.Db;
+import cn.hutool.db.Entity;
 import cn.hutool.log.StaticLog;
-import com.opensharing.bigdata.factory.SparkFactory;
-import com.opensharing.bigdata.factory.ZookeeperFactory;
+import com.opensharing.bigdata.handler.ConsoleKafkaRDDHandler;
+import com.opensharing.bigdata.handler.RDDHandler;
+import com.opensharing.bigdata.toolfactory.SparkFactory;
+import com.opensharing.bigdata.toolfactory.ZookeeperFactory;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.SparkConf;
+import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.Durations;
 import org.apache.spark.streaming.api.java.JavaDStream;
@@ -15,6 +21,7 @@ import org.apache.spark.streaming.api.java.JavaInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import org.apache.spark.streaming.kafka010.*;
 
+import java.sql.SQLException;
 import java.util.*;
 
 /**
@@ -27,7 +34,7 @@ import java.util.*;
  * @author ludengke
  * @date 2019/12/11
  **/
-public abstract class SparkStreamingKafkaTemplate {
+public abstract class SparkStreamingKafkaFactory {
 
     /**
      * SparkConf:spark应用的配置类
@@ -43,14 +50,18 @@ public abstract class SparkStreamingKafkaTemplate {
     /**
      * kafka配置
      */
-    private Map<String, Object> kafkaConfMap;
+    protected Map<String, Object> kafkaConfMap;
 
-    private static final String CONSUMER_TOPIC_NAME = "";
+    protected static final String CONSUMER_TOPIC_NAME = "";
+    protected static final String CONSUMER_GROUP_ID = "";
+    protected static final String OFFSET_TABLE_NAME = "";
 
-    private String OFFSET_DIR = "";
+    protected String OFFSET_DIR = "";
 
     private final static OffsetStore DefaultOffsetStore = OffsetStore.KAFKA;
     private OffsetStore offsetStore = DefaultOffsetStore;
+
+    protected List<RDDHandler> handlers = new ArrayList<RDDHandler>();
 
     /**
      * 模板初始化函数
@@ -60,7 +71,7 @@ public abstract class SparkStreamingKafkaTemplate {
      *  2. spark.streaming.kafka.maxRatePerPartition：spark从kafka的每个分区每秒取出的数据条数
      * @param javaStreamingContext 已初始化的javaStreamingContext
      */
-    protected void init(JavaStreamingContext javaStreamingContext){
+    public void init(JavaStreamingContext javaStreamingContext){
         this.javaStreamingContext = javaStreamingContext;
         this.sparkConf = javaStreamingContext.sparkContext().getConf();
     }
@@ -77,7 +88,7 @@ public abstract class SparkStreamingKafkaTemplate {
      * @param sparkConfMap 需要设置的SparkConf属性和必须属性
      * @param kafkaConfMap kafka的基本配置
      */
-    protected void init(Map<Object,Object> sparkConfMap,Map<String,Object> kafkaConfMap){
+    public void init(Map<Object,Object> sparkConfMap,Map<String,Object> kafkaConfMap){
         SparkConf sparkConf = createSparkConf(sparkConfMap);
         if (sparkConfMap.containsKey(TemplateConf.APP_NAME)){
             sparkConf.setAppName(sparkConfMap.get(TemplateConf.APP_NAME).toString());
@@ -91,6 +102,44 @@ public abstract class SparkStreamingKafkaTemplate {
         Duration duration = sparkConfMap.containsKey(TemplateConf.DURATION)? (Duration) sparkConfMap.get(TemplateConf.DURATION) :Durations.seconds(10);
         this.javaStreamingContext = new JavaStreamingContext(sparkConf, duration);
         this.kafkaConfMap = kafkaConfMap;
+    }
+
+    /**
+     * 模板初始化函数
+     * 传入外部初始化好的JavaStreamingContext，
+     * 需设置
+     *  1. 启动间隔
+     *  2. spark.streaming.kafka.maxRatePerPartition：spark从kafka的每个分区每秒取出的数据条数
+     * @param javaStreamingContext 已初始化的javaStreamingContext
+     */
+    public void initAndStart(JavaStreamingContext javaStreamingContext){
+        this.init(javaStreamingContext);
+        try {
+            this.start();
+        } catch (Exception e) {
+            StaticLog.error("streaming执行异常，{}",e);
+        }
+    }
+
+    /**
+     * 模板初始化函数
+     * 传入基本的SparkConf配置
+     * 包含：
+     *  1.app_name ： {str，必须}
+     *  2.duration ：{Duration，必须}
+     *  3.master ：{str，非必须}
+     *  4.kryo_classes ：{arr(Class数组)，非必须}
+     *  ......与SparkConf一致，仅对1,2做检剩余的属性不做检查
+     * @param sparkConfMap 需要设置的SparkConf属性和必须属性
+     * @param kafkaConfMap kafka的基本配置
+     */
+    public void initAndStart(Map<Object,Object> sparkConfMap,Map<String,Object> kafkaConfMap){
+        this.init(sparkConfMap,kafkaConfMap);
+        try {
+            this.start();
+        } catch (Exception e) {
+            StaticLog.error("streaming执行异常，{}",e);
+        }
     }
 
     /**
@@ -123,7 +172,10 @@ public abstract class SparkStreamingKafkaTemplate {
     /**
      * 启动SparkStreamingKafka
      */
-    public void start(){
+    public void start() throws Exception {
+        if (handlers.isEmpty()) {
+            handlers.add(new ConsoleKafkaRDDHandler());
+        }
         this.work();
     }
 
@@ -145,55 +197,45 @@ public abstract class SparkStreamingKafkaTemplate {
         return sparkConf;
     }
 
-    private void work() {
+    private void work() throws Exception {
 
         // 根据 Kafka配置以及 sc对象生成 Streaming对象
         JavaInputDStream<ConsumerRecord<String, String>> stream = this.getStreaming();
 
-        // Kafka 中的一条数据
-        JavaDStream<String> lines = stream.map(ConsumerRecord::value);
-        this.handle(lines);
-
-        // 更新存储在 Zookeeper中的偏移量
-        switch (this.offsetStore){
-            case ZOOKEEPER:
-                stream.foreachRDD(rdd -> {
-                    OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
-                    for (OffsetRange o : offsetRanges) {
-                        ZookeeperFactory.getZkUtils().updatePersistentPath(
-                                String.join("/", OFFSET_DIR, String.valueOf(o.partition())),
-                                String.valueOf(o.untilOffset()),
-                                ZookeeperFactory.getZkUtils().defaultAcls(String.join("/", OFFSET_DIR, String.valueOf(o.partition())))
-                        );
-                        StaticLog.info("UPDATE OFFSET WITH [ topic :" + o.topic() + " partition :" + o.partition() + " offset :" + o.fromOffset() + " ~ " + o.untilOffset() + " ]");
-                    }
-                });
-                break;
-            case KAFKA:break;
-            case MYSQL:break;
-        }
+        stream.foreachRDD(line->{
+            line.persist(StorageLevel.MEMORY_AND_DISK_SER_2());
+            for (RDDHandler rddHandler : handlers) {
+                rddHandler.process(line);
+            }
+            line.unpersist();
+        });
+        updateOffset(stream);
     }
 
-    protected abstract void handle(JavaDStream<String> lines);
+    /**
+     * 从指定位置获取offset
+     *
+     * @return offset集
+     */
+    protected abstract Map<TopicPartition, Long> getOffset() throws Exception;
+
+    /**
+     * 更新offset
+     *
+     * @param stream kafka流
+     */
+    protected abstract void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream) throws Exception;
 
     /**
      * 根据StreamingContext以及Kafka配置生成DStream
      */
-    private JavaInputDStream<ConsumerRecord<String, String>> getStreaming() {
-        // 获取偏移量存储路径下的偏移量节点
-        if (!ZookeeperFactory.getZkClient().exists(OFFSET_DIR)) {
-            ZookeeperFactory.getZkClient().createPersistent(OFFSET_DIR, true);
-        }
-        List<String> children = ZookeeperFactory.getZkClient().getChildren(OFFSET_DIR);
+    private JavaInputDStream<ConsumerRecord<String, String>> getStreaming() throws Exception {
+        Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
 
-        if (children != null && !children.isEmpty()) {
-            Map<TopicPartition, Long> fromOffsets = new HashMap<>(children.size());
-            // 可以读取到存在Zookeeper中的偏移量 使用读取到的偏移量创建Streaming来读取Kafka
-            for (String child : children) {
-                long offset = Long.valueOf(ZookeeperFactory.getZkClient().readData(String.join("/", OFFSET_DIR, child)));
-                fromOffsets.put(new TopicPartition(CONSUMER_TOPIC_NAME, Integer.valueOf(child)), offset);
-                StaticLog.info("FOUND OFFSET IN ZOOKEEPER, USE [ partition :" + child + " offset :" + offset + " ]");
-            }
+        fromOffsets = getOffset();
+
+
+        if(!fromOffsets.isEmpty()){
             StaticLog.info("CREATE DIRECT STREAMING WITH CUSTOMIZED OFFSET..");
             return KafkaUtils.createDirectStream(
                     javaStreamingContext,
@@ -201,7 +243,6 @@ public abstract class SparkStreamingKafkaTemplate {
                     ConsumerStrategies.Assign(fromOffsets.keySet(), kafkaConfMap, fromOffsets)
             );
         } else {
-            // Zookeeper内没有存储偏移量 使用默认的偏移量创建Streaming
             StaticLog.info("NO OFFSET FOUND, CREATE DIRECT STREAMING WITH DEFAULT OFFSET..");
             return KafkaUtils.createDirectStream(
                     javaStreamingContext,
@@ -209,6 +250,11 @@ public abstract class SparkStreamingKafkaTemplate {
                     ConsumerStrategies.Subscribe(Collections.singleton(CONSUMER_TOPIC_NAME), kafkaConfMap)
             );
         }
+    }
+
+    public SparkStreamingKafkaFactory addHandler(RDDHandler rddHandler){
+        this.handlers.add(rddHandler);
+        return this;
     }
 
     /**

@@ -1,4 +1,4 @@
-package com.opensharing.bigdata.factory;
+package com.opensharing.bigdata.toolfactory;
 
 import com.sun.rowset.internal.Row;
 import org.apache.spark.SparkConf;

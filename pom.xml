@@ -19,6 +19,7 @@
         <kafka.version>2.1.1</kafka.version>
         <spark.version>2.3.0</spark.version>
         <zk.client.version>0.10</zk.client.version>
+        <mysql.version>8.0.11</mysql.version>
     </properties>
 
     <dependencies>
@@ -62,6 +63,13 @@
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
             <version>5.0.6</version>
+        </dependency>
+
+        <!--mysql数据库驱动 -->
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>${mysql.version}</version>
         </dependency>
     </dependencies>
 

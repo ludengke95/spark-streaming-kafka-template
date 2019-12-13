@@ -1,4 +1,4 @@
-package com.opensharing.bigdata.factory;
+package com.opensharing.bigdata.toolfactory;
 import cn.hutool.core.util.NumberUtil;
 import com.opensharing.bigdata.Serializer.CustomSerializer;
 import kafka.utils.ZkUtils;
