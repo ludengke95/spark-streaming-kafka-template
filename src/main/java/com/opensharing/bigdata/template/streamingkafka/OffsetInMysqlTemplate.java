@@ -8,8 +8,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.streaming.api.java.JavaInputDStream;
 import org.apache.spark.streaming.kafka010.HasOffsetRanges;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-
-import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -19,16 +17,38 @@ import java.util.Map;
  * @author ludengke
  * @date 2019/12/13
  **/
-public class KafkaToSparkStreamingOffsetInMysqlTemplate extends SparkStreamingKafkaFactory {
+public class OffsetInMysqlTemplate implements OffsetTemplate {
+
+    /**
+     * offset 所需要的table的名称
+     */
+    private String offsetTableName;
+
+    /**
+     * topic 的名称
+     */
+    private String topicName;
+
+    /**
+     * 消费者组的ID
+     */
+    private String groupId;
+
+    public OffsetInMysqlTemplate(String offsetTableName, String topicName, String groupId) {
+        this.offsetTableName = offsetTableName;
+        this.topicName = topicName;
+        this.groupId = groupId;
+    }
+
     /**
      * 从指定位置获取offset
      *
      * @return offset集
      */
     @Override
-    protected Map<TopicPartition, Long> getOffset() throws Exception {
+    public Map<TopicPartition, Long> getOffset() throws Exception {
         Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
-        List<Entity> offsets = Db.use().find(Arrays.asList(new String[]{"topic","partition","offset"}),Entity.create(OFFSET_TABLE_NAME).set("topic", CONSUMER_TOPIC_NAME).set("group_id",CONSUMER_GROUP_ID));
+        List<Entity> offsets = Db.use().find(Arrays.asList(new String[]{"topic","partition","offset"}),Entity.create(offsetTableName).set("topic", topicName).set("group_id",groupId));
         offsets.forEach(entity -> {
             StaticLog.info("FOUND OFFSET IN MYSQL, USE [ topic : {} ,partition : {} ,offset : {} ]",
                     entity.getStr("topic"),entity.getInt("partition"),entity.getInt("offset"));
@@ -43,15 +63,15 @@ public class KafkaToSparkStreamingOffsetInMysqlTemplate extends SparkStreamingKa
      * @param stream kafka流
      */
     @Override
-    protected void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream) throws Exception{
+    public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream) throws Exception{
         stream.foreachRDD(rdd -> {
             OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
             for (OffsetRange o : offsetRanges) {
-                Db.use().insertOrUpdate(Entity.create(OFFSET_TABLE_NAME)
-                        .set("topic",o.topic())
+                Db.use().insertOrUpdate(Entity.create(offsetTableName)
+                        .set("topic",topicName)
                         .set("partition",o.partition())
                         .set("offset",o.untilOffset())
-                        .set("group_id",CONSUMER_GROUP_ID));
+                        .set("group_id",groupId));
                 StaticLog.info("UPDATE OFFSET TO MYSQL WITH [ topic : {} ,partition : {} ,offset: {} ~ {} ]",
                         o.topic(),o.partition(),o.fromOffset(),o.untilOffset());
             }

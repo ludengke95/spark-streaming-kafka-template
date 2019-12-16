@@ -1,13 +1,9 @@
 package com.opensharing.bigdata.template.streamingkafka;
 
-import cn.hutool.db.Db;
-import cn.hutool.db.Entity;
 import cn.hutool.log.StaticLog;
 import com.opensharing.bigdata.handler.ConsoleKafkaRDDHandler;
 import com.opensharing.bigdata.handler.RDDHandler;
-import com.opensharing.bigdata.toolfactory.SparkFactory;
-import com.opensharing.bigdata.toolfactory.ZookeeperFactory;
-import org.apache.kafka.clients.admin.AdminClient;
+import com.opensharing.bigdata.toolfactory.SparkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -16,12 +12,9 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.Durations;
-import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import org.apache.spark.streaming.kafka010.*;
-
-import java.sql.SQLException;
 import java.util.*;
 
 /**
@@ -34,7 +27,7 @@ import java.util.*;
  * @author ludengke
  * @date 2019/12/11
  **/
-public abstract class SparkStreamingKafkaFactory {
+public class SparkStreamingKafka {
 
     /**
      * SparkConf:spark应用的配置类
@@ -52,16 +45,38 @@ public abstract class SparkStreamingKafkaFactory {
      */
     protected Map<String, Object> kafkaConfMap;
 
-    protected static final String CONSUMER_TOPIC_NAME = "";
-    protected static final String CONSUMER_GROUP_ID = "";
-    protected static final String OFFSET_TABLE_NAME = "";
+    /**
+     * topic 的名称
+     */
+    protected String topicName = "";
 
-    protected String OFFSET_DIR = "";
-
-    private final static OffsetStore DefaultOffsetStore = OffsetStore.KAFKA;
-    private OffsetStore offsetStore = DefaultOffsetStore;
+    /**
+     * 消费者组的id
+     */
+    protected String groupId = "";
 
     protected List<RDDHandler> handlers = new ArrayList<RDDHandler>();
+
+    /**
+     * offset存储模板，可以自定义，需要实现两个方法
+     */
+    protected OffsetTemplate offsetTemplate;
+
+    /**
+     * hdfs Url，选填，设置优雅停止的时候必填
+     */
+    private String hdfsUrl;
+
+    /**
+     * 优雅停止时，信号文件的hdfs地址，设置优雅停止的时候必填
+     */
+    private String stopFilePath;
+
+    /**
+     * 优雅停止时，检测文件间隔，设置优雅停止的时候必填
+     */
+    private Integer stopSecond;
+
 
     /**
      * 模板初始化函数
@@ -71,9 +86,12 @@ public abstract class SparkStreamingKafkaFactory {
      *  2. spark.streaming.kafka.maxRatePerPartition：spark从kafka的每个分区每秒取出的数据条数
      * @param javaStreamingContext 已初始化的javaStreamingContext
      */
-    public void init(JavaStreamingContext javaStreamingContext){
-        this.javaStreamingContext = javaStreamingContext;
-        this.sparkConf = javaStreamingContext.sparkContext().getConf();
+    public SparkStreamingKafka create(JavaStreamingContext javaStreamingContext,Map<String,Object> kafkaConfMap){
+        SparkStreamingKafka sparkStreamingKafka = new SparkStreamingKafka();
+        sparkStreamingKafka.javaStreamingContext = javaStreamingContext;
+        sparkStreamingKafka.sparkConf = javaStreamingContext.sparkContext().getConf();
+        sparkStreamingKafka.kafkaConfMap = kafkaConfMap;
+        return sparkStreamingKafka;
     }
 
     /**
@@ -84,11 +102,12 @@ public abstract class SparkStreamingKafkaFactory {
      *  2.duration ：{Duration，必须}
      *  3.master ：{str，非必须}
      *  4.kryo_classes ：{arr(Class数组)，非必须}
-     *  ......与SparkConf一致，仅对1,2做检剩余的属性不做检查
+     *  ......与SparkConf一致，仅对1,2做检查 剩余的属性不做检查
      * @param sparkConfMap 需要设置的SparkConf属性和必须属性
      * @param kafkaConfMap kafka的基本配置
      */
-    public void init(Map<Object,Object> sparkConfMap,Map<String,Object> kafkaConfMap){
+    public static SparkStreamingKafka create(Map<Object,Object> sparkConfMap, Map<String,Object> kafkaConfMap){
+        SparkStreamingKafka sparkStreamingKafka = new SparkStreamingKafka();
         SparkConf sparkConf = createSparkConf(sparkConfMap);
         if (sparkConfMap.containsKey(TemplateConf.APP_NAME)){
             sparkConf.setAppName(sparkConfMap.get(TemplateConf.APP_NAME).toString());
@@ -100,54 +119,9 @@ public abstract class SparkStreamingKafkaFactory {
             sparkConf.registerKryoClasses((Class<?>[]) sparkConfMap.get(TemplateConf.KRYO_CLASSES));
         }
         Duration duration = sparkConfMap.containsKey(TemplateConf.DURATION)? (Duration) sparkConfMap.get(TemplateConf.DURATION) :Durations.seconds(10);
-        this.javaStreamingContext = new JavaStreamingContext(sparkConf, duration);
-        this.kafkaConfMap = kafkaConfMap;
-    }
-
-    /**
-     * 模板初始化函数
-     * 传入外部初始化好的JavaStreamingContext，
-     * 需设置
-     *  1. 启动间隔
-     *  2. spark.streaming.kafka.maxRatePerPartition：spark从kafka的每个分区每秒取出的数据条数
-     * @param javaStreamingContext 已初始化的javaStreamingContext
-     */
-    public void initAndStart(JavaStreamingContext javaStreamingContext){
-        this.init(javaStreamingContext);
-        try {
-            this.start();
-        } catch (Exception e) {
-            StaticLog.error("streaming执行异常，{}",e);
-        }
-    }
-
-    /**
-     * 模板初始化函数
-     * 传入基本的SparkConf配置
-     * 包含：
-     *  1.app_name ： {str，必须}
-     *  2.duration ：{Duration，必须}
-     *  3.master ：{str，非必须}
-     *  4.kryo_classes ：{arr(Class数组)，非必须}
-     *  ......与SparkConf一致，仅对1,2做检剩余的属性不做检查
-     * @param sparkConfMap 需要设置的SparkConf属性和必须属性
-     * @param kafkaConfMap kafka的基本配置
-     */
-    public void initAndStart(Map<Object,Object> sparkConfMap,Map<String,Object> kafkaConfMap){
-        this.init(sparkConfMap,kafkaConfMap);
-        try {
-            this.start();
-        } catch (Exception e) {
-            StaticLog.error("streaming执行异常，{}",e);
-        }
-    }
-
-    /**
-     * 设置offset的存储方式
-     * @param offsetStore offset的存储方式，使用模板中的枚举类
-     */
-    private void setOffsetStore(OffsetStore offsetStore){
-        this.offsetStore = offsetStore;
+        sparkStreamingKafka.javaStreamingContext = new JavaStreamingContext(sparkConf, duration);
+        sparkStreamingKafka.kafkaConfMap = defaultKafkaConf(kafkaConfMap);
+        return sparkStreamingKafka;
     }
 
     /**
@@ -157,7 +131,7 @@ public abstract class SparkStreamingKafkaFactory {
      *      2. 不设置key.deserializer和value.deserializer,默认设置为StringDeserializer
      * @param kafkaConfMap kafka基本设置
      */
-    private void defaultKafkaConf(Map<String,Object> kafkaConfMap){
+    private static Map<String,Object> defaultKafkaConf(Map<String, Object> kafkaConfMap){
         if(!kafkaConfMap.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)){
             kafkaConfMap.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,false);
         }
@@ -167,6 +141,7 @@ public abstract class SparkStreamingKafkaFactory {
         if(!kafkaConfMap.containsKey(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG)){
             kafkaConfMap.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         }
+        return kafkaConfMap;
     }
 
     /**
@@ -176,7 +151,23 @@ public abstract class SparkStreamingKafkaFactory {
         if (handlers.isEmpty()) {
             handlers.add(new ConsoleKafkaRDDHandler());
         }
+        if (offsetTemplate == null) {
+            offsetTemplate = new OffsetInKafkaTemplate(kafkaConfMap, topicName, groupId);
+        }
         this.work();
+        javaStreamingContext.start();
+        if(stopFilePath!=null){
+            SparkUtils.stopByMarkFile(javaStreamingContext, hdfsUrl,stopFilePath,stopSecond);
+        }else {
+            try {
+                javaStreamingContext.awaitTermination();
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                javaStreamingContext.close();
+            }
+        }
+
     }
 
     /**
@@ -184,7 +175,7 @@ public abstract class SparkStreamingKafkaFactory {
      * 需要剔除自定义的配置，剩余的配置写入SparkConf
      * @return SparkConf
      */
-    private SparkConf createSparkConf(Map<Object,Object> map){
+    private static SparkConf createSparkConf(Map<Object, Object> map){
         HashMap<String,String> tmp = new HashMap<>(16);
         map.forEach((key,value)->{
             List<TemplateConf> templateConf = Arrays.asList(TemplateConf.values());
@@ -192,7 +183,7 @@ public abstract class SparkStreamingKafkaFactory {
                 tmp.put(key.toString(),value.toString());
             }
         });
-        SparkConf sparkConf = SparkFactory.getDefaultSparkConf();
+        SparkConf sparkConf = SparkUtils.getDefaultSparkConf();
         tmp.forEach(sparkConf::set);
         return sparkConf;
     }
@@ -209,22 +200,8 @@ public abstract class SparkStreamingKafkaFactory {
             }
             line.unpersist();
         });
-        updateOffset(stream);
+        offsetTemplate.updateOffset(stream);
     }
-
-    /**
-     * 从指定位置获取offset
-     *
-     * @return offset集
-     */
-    protected abstract Map<TopicPartition, Long> getOffset() throws Exception;
-
-    /**
-     * 更新offset
-     *
-     * @param stream kafka流
-     */
-    protected abstract void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream) throws Exception;
 
     /**
      * 根据StreamingContext以及Kafka配置生成DStream
@@ -232,7 +209,7 @@ public abstract class SparkStreamingKafkaFactory {
     private JavaInputDStream<ConsumerRecord<String, String>> getStreaming() throws Exception {
         Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
 
-        fromOffsets = getOffset();
+        fromOffsets = offsetTemplate.getOffset();
 
 
         if(!fromOffsets.isEmpty()){
@@ -247,14 +224,9 @@ public abstract class SparkStreamingKafkaFactory {
             return KafkaUtils.createDirectStream(
                     javaStreamingContext,
                     LocationStrategies.PreferConsistent(),
-                    ConsumerStrategies.Subscribe(Collections.singleton(CONSUMER_TOPIC_NAME), kafkaConfMap)
+                    ConsumerStrategies.Subscribe(Collections.singleton(topicName), kafkaConfMap)
             );
         }
-    }
-
-    public SparkStreamingKafkaFactory addHandler(RDDHandler rddHandler){
-        this.handlers.add(rddHandler);
-        return this;
     }
 
     /**
@@ -284,30 +256,71 @@ public abstract class SparkStreamingKafkaFactory {
         }
     }
 
-    /**
-     * offset存储方式枚举类
-     */
-    public enum OffsetStore {
-        KAFKA("kafka"), ZOOKEEPER("duration"), MYSQL("mysql");
+    public SparkStreamingKafka addHandler(RDDHandler rddHandler){
+        this.handlers.add(rddHandler);
+        return this;
+    }
 
-        OffsetStore(String value) {
-            this.value = value;
-        }
+    public Map<String, Object> getKafkaConfMap() {
+        return kafkaConfMap;
+    }
 
-        private String value;
+    public SparkStreamingKafka setKafkaConfMap(Map<String, Object> kafkaConfMap) {
+        this.kafkaConfMap = kafkaConfMap;
+        return this;
+    }
 
-        String getValue() {
-            return value;
-        }
+    public String getTopicName() {
+        return topicName;
+    }
 
-        public static OffsetStore fromValue(String value) {
-            for (OffsetStore offsetStore : OffsetStore.values()) {
-                if (offsetStore.getValue().equals(value)) {
-                    return offsetStore;
-                }
-            }
-            //default value
-            return null;
-        }
+    public SparkStreamingKafka setTopicName(String topicName) {
+        this.topicName = topicName;
+        return this;
+    }
+
+    public String getGroupId() {
+        return groupId;
+    }
+
+    public SparkStreamingKafka setGroupId(String groupId) {
+        this.groupId = groupId;
+        return this;
+    }
+
+    public OffsetTemplate getOffsetTemplate() {
+        return offsetTemplate;
+    }
+
+    public SparkStreamingKafka setOffsetTemplate(OffsetTemplate offsetTemplate) {
+        this.offsetTemplate = offsetTemplate;
+        return this;
+    }
+
+    public String getHdfsUrl() {
+        return hdfsUrl;
+    }
+
+    public SparkStreamingKafka setHdfsUrl(String hdfsUrl) {
+        this.hdfsUrl = hdfsUrl;
+        return this;
+    }
+
+    public String getStopFilePath() {
+        return stopFilePath;
+    }
+
+    public SparkStreamingKafka setStopFilePath(String stopFilePath) {
+        this.stopFilePath = stopFilePath;
+        return this;
+    }
+
+    public Integer getStopSecond() {
+        return stopSecond;
+    }
+
+    public SparkStreamingKafka setStopSecond(Integer stopSecond) {
+        this.stopSecond = stopSecond;
+        return this;
     }
 }
