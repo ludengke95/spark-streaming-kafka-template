@@ -1,6 +1,7 @@
 package com.opensharing.bigdata.template.streamingkafka;
 
 import cn.hutool.log.StaticLog;
+import com.opensharing.bigdata.Conf.ZkConf;
 import com.opensharing.bigdata.toolfactory.ZookeeperFactory;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -35,10 +36,11 @@ public class OffsetInZookeeperTemplate implements OffsetTemplate {
      */
     private String groupId = "";
 
-    public OffsetInZookeeperTemplate(String offsetDir, String topicName, String groupId) {
+    public OffsetInZookeeperTemplate(Map<ZkConf,Object> map, String offsetDir, String topicName, String groupId) {
         this.offsetDir = offsetDir;
         this.topicName = topicName;
         this.groupId = groupId;
+        ZookeeperFactory.init(map);
     }
 
     /**
@@ -73,11 +75,12 @@ public class OffsetInZookeeperTemplate implements OffsetTemplate {
      */
     @Override
     public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream) throws Exception{
+        String path = String.join("/",offsetDir,groupId,topicName);
         stream.foreachRDD(rdd -> {
             OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
             for (OffsetRange o : offsetRanges) {
                 ZookeeperFactory.getZkUtils().updatePersistentPath(
-                        String.join("/", offsetDir, String.valueOf(o.partition())),
+                        String.join("/", path, String.valueOf(o.partition())),
                         String.valueOf(o.untilOffset()),
                         ZookeeperFactory.getZkUtils().defaultAcls(String.join("/", offsetDir, String.valueOf(o.partition())))
                 );

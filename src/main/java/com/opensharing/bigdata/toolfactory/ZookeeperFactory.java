@@ -1,5 +1,6 @@
 package com.opensharing.bigdata.toolfactory;
 import cn.hutool.core.util.NumberUtil;
+import com.opensharing.bigdata.Conf.ZkConf;
 import com.opensharing.bigdata.Serializer.CustomSerializer;
 import kafka.utils.ZkUtils;
 import org.I0Itec.zkclient.ZkClient;
@@ -18,7 +19,7 @@ public class ZookeeperFactory {
     private static ZkClient ZK_CLIENT = null;
     private static ZkUtils ZK_UTILS = null;
 
-    public void init(Map<String,Object> map){
+    public static void init(Map<ZkConf,Object> map){
         ZK_CONNECTION = new ZkConnection(map.get(ZkConf.URL).toString());
         if(map.containsKey(ZkConf.ZK_SERIALIZER)){
             ZK_CLIENT = new ZkClient(ZK_CONNECTION, NumberUtil.parseInt(map.get(ZkConf.CONNECTION_TIMEOUT).toString()),(ZkSerializer) map.get(ZkConf.ZK_SERIALIZER));
@@ -41,30 +42,4 @@ public class ZookeeperFactory {
         return ZK_UTILS;
     }
 
-    /**
-     * 模板配置枚举类
-     */
-    public enum ZkConf {
-        URL("url"), CONNECTION_TIMEOUT("connection_timeout"),ZK_SERIALIZER("zk_serializer");
-
-        private ZkConf(Object value) {
-            this.value = value;
-        }
-
-        private Object value;
-
-        Object getValue() {
-            return value;
-        }
-
-        public static ZkConf fromValue(String value) {
-            for (ZkConf zkConf : ZkConf.values()) {
-                if (zkConf.getValue().equals(value)) {
-                    return zkConf;
-                }
-            }
-            //default value
-            return null;
-        }
-    }
 }

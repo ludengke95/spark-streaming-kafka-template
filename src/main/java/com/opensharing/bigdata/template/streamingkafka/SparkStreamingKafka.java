@@ -1,6 +1,7 @@
 package com.opensharing.bigdata.template.streamingkafka;
 
 import cn.hutool.log.StaticLog;
+import com.opensharing.bigdata.Conf.TemplateConf;
 import com.opensharing.bigdata.handler.ConsoleKafkaRDDHandler;
 import com.opensharing.bigdata.handler.RDDHandler;
 import com.opensharing.bigdata.toolfactory.SparkUtils;
@@ -100,7 +101,7 @@ public class SparkStreamingKafka {
      * 包含：
      *  1.app_name ： {str，必须}
      *  2.duration ：{Duration，必须}
-     *  3.master ：{str，非必须}
+     *  3.master ：{str，本地运行必须，线上运行非必须}
      *  4.kryo_classes ：{arr(Class数组)，非必须}
      *  ......与SparkConf一致，仅对1,2做检查 剩余的属性不做检查
      * @param sparkConfMap 需要设置的SparkConf属性和必须属性
@@ -118,7 +119,7 @@ public class SparkStreamingKafka {
         if (sparkConfMap.containsKey(TemplateConf.KRYO_CLASSES)){
             sparkConf.registerKryoClasses((Class<?>[]) sparkConfMap.get(TemplateConf.KRYO_CLASSES));
         }
-        Duration duration = sparkConfMap.containsKey(TemplateConf.DURATION)? (Duration) sparkConfMap.get(TemplateConf.DURATION) :Durations.seconds(10);
+        Duration duration = sparkConfMap.containsKey(TemplateConf.DURATION)?(Duration) sparkConfMap.get(TemplateConf.DURATION) :Durations.seconds(10);
         sparkStreamingKafka.javaStreamingContext = new JavaStreamingContext(sparkConf, duration);
         sparkStreamingKafka.kafkaConfMap = defaultKafkaConf(kafkaConfMap);
         return sparkStreamingKafka;
@@ -147,27 +148,33 @@ public class SparkStreamingKafka {
     /**
      * 启动SparkStreamingKafka
      */
-    public void start() throws Exception {
+    public void start(){
         if (handlers.isEmpty()) {
             handlers.add(new ConsoleKafkaRDDHandler());
         }
         if (offsetTemplate == null) {
             offsetTemplate = new OffsetInKafkaTemplate(kafkaConfMap, topicName, groupId);
         }
-        this.work();
-        javaStreamingContext.start();
-        if(stopFilePath!=null){
-            SparkUtils.stopByMarkFile(javaStreamingContext, hdfsUrl,stopFilePath,stopSecond);
-        }else {
-            try {
-                javaStreamingContext.awaitTermination();
-            } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                javaStreamingContext.close();
-            }
+        if(groupId == null){
+            groupId = kafkaConfMap.get(ConsumerConfig.GROUP_ID_CONFIG).toString();
         }
-
+        try {
+            this.work();
+            javaStreamingContext.start();
+            if(stopFilePath!=null){
+                SparkUtils.stopByMarkFile(javaStreamingContext, hdfsUrl,stopFilePath,stopSecond);
+            }else {
+                try {
+                    javaStreamingContext.awaitTermination();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    javaStreamingContext.close();
+                }
+            }
+        } catch (Exception e) {
+            StaticLog.error("执行异常,{}",e);
+        }
     }
 
     /**
@@ -226,33 +233,6 @@ public class SparkStreamingKafka {
                     LocationStrategies.PreferConsistent(),
                     ConsumerStrategies.Subscribe(Collections.singleton(topicName), kafkaConfMap)
             );
-        }
-    }
-
-    /**
-     * 模板配置枚举类
-     */
-    public enum TemplateConf {
-        APP_NAME("app_name"), DURATION("duration"), MASTER("master"),KRYO_CLASSES("kryo_classes");
-
-        TemplateConf(String value) {
-            this.value = value;
-        }
-
-        private String value;
-
-        String getValue() {
-            return value;
-        }
-
-        public static TemplateConf fromValue(String value) {
-            for (TemplateConf templateConf : TemplateConf.values()) {
-                if (templateConf.getValue().equals(value)) {
-                    return templateConf;
-                }
-            }
-            //default value
-            return null;
         }
     }
 
