@@ -1,6 +1,6 @@
 package com.opensharing.bigdata.toolfactory;
 import cn.hutool.core.util.NumberUtil;
-import com.opensharing.bigdata.Conf.ZkConf;
+import com.opensharing.bigdata.conf.ZkConf;
 import com.opensharing.bigdata.Serializer.CustomSerializer;
 import kafka.utils.ZkUtils;
 import org.I0Itec.zkclient.ZkClient;

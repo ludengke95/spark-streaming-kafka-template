@@ -1,7 +1,7 @@
 package com.opensharing.bigdata.template.streamingkafka;
 
-import com.opensharing.bigdata.Conf.TemplateConf;
-import com.opensharing.bigdata.Conf.ZkConf;
+import com.opensharing.bigdata.conf.TemplateConf;
+import com.opensharing.bigdata.conf.ZkConf;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.streaming.Durations;

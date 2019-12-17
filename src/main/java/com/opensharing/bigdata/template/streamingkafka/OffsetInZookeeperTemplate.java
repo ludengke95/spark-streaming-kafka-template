@@ -1,7 +1,7 @@
 package com.opensharing.bigdata.template.streamingkafka;
 
 import cn.hutool.log.StaticLog;
-import com.opensharing.bigdata.Conf.ZkConf;
+import com.opensharing.bigdata.conf.ZkConf;
 import com.opensharing.bigdata.toolfactory.ZookeeperFactory;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;

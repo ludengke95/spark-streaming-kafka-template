@@ -2,7 +2,7 @@ package com.opensharing.bigdata.template.streamingkafka;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.log.StaticLog;
-import com.opensharing.bigdata.Conf.TemplateConf;
+import com.opensharing.bigdata.conf.TemplateConf;
 import com.opensharing.bigdata.handler.ConsoleKafkaRDDHandler;
 import com.opensharing.bigdata.handler.RDDHandler;
 import com.opensharing.bigdata.toolfactory.SparkUtils;
