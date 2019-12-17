@@ -1,4 +1,4 @@
-package com.opensharing.bigdata.Conf;
+package com.opensharing.bigdata.conf;
 
 /**
  * 模板配置枚举类
