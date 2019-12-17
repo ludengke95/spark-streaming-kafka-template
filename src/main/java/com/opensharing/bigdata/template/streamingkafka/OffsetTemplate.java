@@ -16,6 +16,14 @@ public interface OffsetTemplate {
 
     /**
      * 更新offset
+     *         stream.foreachRDD(rdd -> {
+     *             OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
+     *             for (OffsetRange o : offsetRanges) {
+     *                 //存储偏移量
+     *                 StaticLog.info("UPDATE OFFSET TO MYSQL WITH [ topic : {} ,partition : {} ,offset: {} ~ {} ]",
+     *                         o.topic(),o.partition(),o.fromOffset(),o.untilOffset());
+     *             }
+     *         });
      *
      * @param stream kafka流
      */
