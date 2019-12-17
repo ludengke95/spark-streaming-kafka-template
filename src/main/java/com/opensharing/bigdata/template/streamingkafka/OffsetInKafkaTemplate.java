@@ -1,10 +1,14 @@
 package com.opensharing.bigdata.template.streamingkafka;
 
 import cn.hutool.log.StaticLog;
+import com.opensharing.bigdata.toolfactory.ZookeeperFactory;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.streaming.api.java.JavaInputDStream;
+import org.apache.spark.streaming.kafka010.CanCommitOffsets;
+import org.apache.spark.streaming.kafka010.HasOffsetRanges;
+import org.apache.spark.streaming.kafka010.OffsetRange;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -20,20 +24,8 @@ public class OffsetInKafkaTemplate implements OffsetTemplate{
      */
     private Map<String,Object> kafkaConfMap;
 
-    /**
-     * topic的名称
-     */
-    private String topicName;
-
-    /**
-     * 消费者组ID
-     */
-    private String groupId;
-
-    public OffsetInKafkaTemplate(Map<String, Object> kafkaConfMap, String topicName, String groupId) {
+    public OffsetInKafkaTemplate(Map<String, Object> kafkaConfMap) {
         this.kafkaConfMap = kafkaConfMap;
-        this.topicName = topicName;
-        this.groupId = groupId;
     }
 
     /**
@@ -42,7 +34,7 @@ public class OffsetInKafkaTemplate implements OffsetTemplate{
      * @return offset集
      */
     @Override
-    public Map<TopicPartition, Long> getOffset() throws Exception{
+    public Map<TopicPartition, Long> getOffset(String topicName,String groupId) throws Exception{
         Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
         AdminClient adminClient = AdminClient.create(kafkaConfMap);
         try{
@@ -65,7 +57,10 @@ public class OffsetInKafkaTemplate implements OffsetTemplate{
      * @param stream kafka流
      */
     @Override
-    public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream) throws Exception{
-
+    public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream,String topicName,String groupId) throws Exception{
+        stream.foreachRDD(rdd -> {
+            OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
+            ((CanCommitOffsets) stream.inputDStream()).commitAsync(offsetRanges);
+        });
     }
 }

@@ -12,12 +12,12 @@ public interface OffsetTemplate {
      *
      * @return offset集
      */
-    public Map<TopicPartition, Long> getOffset() throws Exception;
+    public Map<TopicPartition, Long> getOffset(String topicName,String groupId) throws Exception;
 
     /**
      * 更新offset
      *
      * @param stream kafka流
      */
-    public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream) throws Exception;
+    public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream,String topicName,String groupId) throws Exception;
 }

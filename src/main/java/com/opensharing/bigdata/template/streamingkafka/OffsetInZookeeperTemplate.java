@@ -26,20 +26,8 @@ public class OffsetInZookeeperTemplate implements OffsetTemplate {
      */
     private String offsetDir = "";
 
-    /**
-     * topic名称
-     */
-    private String topicName = "";
-
-    /**
-     * 消费者组ID
-     */
-    private String groupId = "";
-
-    public OffsetInZookeeperTemplate(Map<ZkConf,Object> map, String offsetDir, String topicName, String groupId) {
+    public OffsetInZookeeperTemplate(Map<ZkConf,Object> map, String offsetDir) {
         this.offsetDir = offsetDir;
-        this.topicName = topicName;
-        this.groupId = groupId;
         ZookeeperFactory.init(map);
     }
 
@@ -49,7 +37,7 @@ public class OffsetInZookeeperTemplate implements OffsetTemplate {
      * @return offset集
      */
     @Override
-    public Map<TopicPartition, Long> getOffset() throws Exception{
+    public Map<TopicPartition, Long> getOffset(String topicName,String groupId) throws Exception{
         String path = String.join("/",offsetDir,groupId,topicName);
         Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
         if (!ZookeeperFactory.getZkClient().exists(path)) {
@@ -74,7 +62,7 @@ public class OffsetInZookeeperTemplate implements OffsetTemplate {
      * @param stream kafka流
      */
     @Override
-    public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream) throws Exception{
+    public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream,String topicName,String groupId) throws Exception{
         String path = String.join("/",offsetDir,groupId,topicName);
         stream.foreachRDD(rdd -> {
             OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();

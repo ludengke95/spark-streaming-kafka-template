@@ -1,5 +1,6 @@
 package com.opensharing.bigdata.template.streamingkafka;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.log.StaticLog;
 import com.opensharing.bigdata.Conf.TemplateConf;
 import com.opensharing.bigdata.handler.ConsoleKafkaRDDHandler;
@@ -153,9 +154,9 @@ public class SparkStreamingKafka {
             handlers.add(new ConsoleKafkaRDDHandler());
         }
         if (offsetTemplate == null) {
-            offsetTemplate = new OffsetInKafkaTemplate(kafkaConfMap, topicName, groupId);
+            offsetTemplate = new OffsetInKafkaTemplate(kafkaConfMap);
         }
-        if(groupId == null){
+        if(StrUtil.isEmpty(groupId)){
             groupId = kafkaConfMap.get(ConsumerConfig.GROUP_ID_CONFIG).toString();
         }
         try {
@@ -173,7 +174,7 @@ public class SparkStreamingKafka {
                 }
             }
         } catch (Exception e) {
-            StaticLog.error("执行异常,{}",e);
+            StaticLog.error(e,"执行异常");
         }
     }
 
@@ -207,7 +208,7 @@ public class SparkStreamingKafka {
             }
             line.unpersist();
         });
-        offsetTemplate.updateOffset(stream);
+        offsetTemplate.updateOffset(stream,topicName,groupId);
     }
 
     /**
@@ -216,7 +217,7 @@ public class SparkStreamingKafka {
     private JavaInputDStream<ConsumerRecord<String, String>> getStreaming() throws Exception {
         Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
 
-        fromOffsets = offsetTemplate.getOffset();
+        fromOffsets = offsetTemplate.getOffset(topicName,groupId);
 
 
         if(!fromOffsets.isEmpty()){

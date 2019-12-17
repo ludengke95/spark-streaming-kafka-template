@@ -17,14 +17,14 @@ import java.util.Map;
 public class SparkStreamingKafkaTest {
 
     @Test
-    public void test(){
+    public void testZk(){
         String topic = "spider-task";
         /*
         如果kafkaConfMap设置了group_id,SparkStreamingKafka可不设置group_id
          */
 //        String groupId = "spark-template";
         Map<Object,Object> sparkConfMap = new HashMap<>();
-        sparkConfMap.put(TemplateConf.APP_NAME,"test");
+        sparkConfMap.put(TemplateConf.APP_NAME,"testZk");
         sparkConfMap.put(TemplateConf.MASTER,"local[4]");
         sparkConfMap.put(TemplateConf.DURATION, Durations.seconds(10));
         Map<String,Object> kafkaConfMap = new HashMap<>();
@@ -39,7 +39,55 @@ public class SparkStreamingKafkaTest {
         zkConfMap.put(ZkConf.CONNECTION_TIMEOUT,"3000");
         SparkStreamingKafka spark = SparkStreamingKafka.create(sparkConfMap, kafkaConfMap)
                 .setTopicName(topic)
-                .setOffsetTemplate(new OffsetInZookeeperTemplate(zkConfMap,"/ldk",topic,"spark-template"));
+                .setOffsetTemplate(new OffsetInZookeeperTemplate(zkConfMap,"/ldk"));
+        spark.start();
+    }
+
+    @Test
+    public void testMysql(){
+        String topic = "spider-task";
+        /*
+        如果kafkaConfMap设置了group_id,SparkStreamingKafka可不设置group_id
+         */
+//        String groupId = "spark-template";
+        Map<Object,Object> sparkConfMap = new HashMap<>();
+        sparkConfMap.put(TemplateConf.APP_NAME,"testMysql");
+        sparkConfMap.put(TemplateConf.MASTER,"local[4]");
+        sparkConfMap.put(TemplateConf.DURATION, Durations.seconds(10));
+        Map<String,Object> kafkaConfMap = new HashMap<>();
+        kafkaConfMap.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "192.168.2.58:9092,192.168.2.58:10092,192.168.2.58:11092");
+        kafkaConfMap.put(ConsumerConfig.GROUP_ID_CONFIG, "spark-template");
+        kafkaConfMap.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        kafkaConfMap.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        kafkaConfMap.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        kafkaConfMap.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        SparkStreamingKafka spark = SparkStreamingKafka.create(sparkConfMap, kafkaConfMap)
+                .setTopicName(topic)
+                .setOffsetTemplate(new OffsetInMysqlTemplate("kafka_offset"));
+        spark.start();
+    }
+
+    @Test
+    public void testKafka(){
+        String topic = "spider-task";
+        /*
+        如果kafkaConfMap设置了group_id,SparkStreamingKafka可不设置group_id
+         */
+//        String groupId = "spark-template";
+        Map<Object,Object> sparkConfMap = new HashMap<>();
+        sparkConfMap.put(TemplateConf.APP_NAME,"testMysql");
+        sparkConfMap.put(TemplateConf.MASTER,"local[4]");
+        sparkConfMap.put(TemplateConf.DURATION, Durations.seconds(10));
+        Map<String,Object> kafkaConfMap = new HashMap<>();
+        kafkaConfMap.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "192.168.2.58:9092,192.168.2.58:10092,192.168.2.58:11092");
+        kafkaConfMap.put(ConsumerConfig.GROUP_ID_CONFIG, "spark-template");
+        kafkaConfMap.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        kafkaConfMap.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        kafkaConfMap.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        kafkaConfMap.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        SparkStreamingKafka spark = SparkStreamingKafka.create(sparkConfMap, kafkaConfMap)
+                .setTopicName(topic)
+                .setOffsetTemplate(new OffsetInKafkaTemplate(kafkaConfMap));
         spark.start();
     }
 }
