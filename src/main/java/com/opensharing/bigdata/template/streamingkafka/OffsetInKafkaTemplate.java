@@ -10,6 +10,7 @@ import org.apache.spark.streaming.kafka010.CanCommitOffsets;
 import org.apache.spark.streaming.kafka010.HasOffsetRanges;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -17,7 +18,7 @@ import java.util.Map;
  * @author ludengke
  * @date 2019/12/13
  **/
-public class OffsetInKafkaTemplate implements OffsetTemplate{
+public class OffsetInKafkaTemplate implements OffsetTemplate, Serializable {
 
     /**
      * 存储kafka配置

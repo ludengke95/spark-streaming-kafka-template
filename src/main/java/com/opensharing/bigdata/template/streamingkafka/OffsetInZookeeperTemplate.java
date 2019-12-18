@@ -9,6 +9,7 @@ import org.apache.spark.streaming.api.java.JavaInputDStream;
 import org.apache.spark.streaming.kafka010.HasOffsetRanges;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +18,7 @@ import java.util.Map;
  * @author ludengke
  * @date 2019/12/13
  **/
-public class OffsetInZookeeperTemplate implements OffsetTemplate {
+public class OffsetInZookeeperTemplate implements OffsetTemplate, Serializable {
 
     /**
      * 路径位置
