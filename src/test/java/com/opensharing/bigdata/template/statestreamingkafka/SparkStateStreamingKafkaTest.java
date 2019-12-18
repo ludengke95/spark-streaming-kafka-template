@@ -72,7 +72,7 @@ public class SparkStateStreamingKafkaTest {
         kafkaConfMap.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         kafkaConfMap.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         kafkaConfMap.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        SparkStreamingKafka spark = SparkStreamingKafka.create(sparkConfMap, kafkaConfMap);
+        SparkStateStreamingKafka spark = new SparkStateStreamingKafka<Long,String>(sparkConfMap, kafkaConfMap,"./checkpointStateStreamingMysql");
         spark.setTopicName(topic);
         spark.setOffsetTemplate(new OffsetInMysqlTemplate("kafka_offset"));
         spark.start();
@@ -96,7 +96,7 @@ public class SparkStateStreamingKafkaTest {
         kafkaConfMap.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         kafkaConfMap.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         kafkaConfMap.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        SparkStreamingKafka spark = SparkStreamingKafka.create(sparkConfMap, kafkaConfMap);
+        SparkStateStreamingKafka spark = new SparkStateStreamingKafka<Long,String>(sparkConfMap, kafkaConfMap,"./checkpointStateStreamingKafka");
         spark.setTopicName(topic);
         spark.setOffsetTemplate(new OffsetInKafkaTemplate(kafkaConfMap));
         spark.start();
