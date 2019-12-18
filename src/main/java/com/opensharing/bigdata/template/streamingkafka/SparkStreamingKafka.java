@@ -3,8 +3,8 @@ package com.opensharing.bigdata.template.streamingkafka;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.log.StaticLog;
 import com.opensharing.bigdata.conf.TemplateConf;
-import com.opensharing.bigdata.handler.ConsoleKafkaRDDHandler;
-import com.opensharing.bigdata.handler.RDDHandler;
+import com.opensharing.bigdata.handler.kafkavalue.ConsoleKafkaRDDHandler;
+import com.opensharing.bigdata.handler.kafkavalue.RDDHandler;
 import com.opensharing.bigdata.toolfactory.SparkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -29,7 +29,7 @@ import java.util.*;
  * @author ludengke
  * @date 2019/12/11
  **/
-public class SparkStreamingKafka {
+public class SparkStreamingKafka{
 
     /**
      * SparkConf:spark应用的配置类
@@ -79,7 +79,41 @@ public class SparkStreamingKafka {
      */
     private Integer stopSecond;
 
+    public SparkStreamingKafka() {
+    }
 
+
+    /**
+     * 构造函数，和create功能一样
+     * @param sparkConfMap
+     * @param kafkaConfMap
+     */
+    protected SparkStreamingKafka(Map<Object,Object> sparkConfMap, Map<String,Object> kafkaConfMap) {
+        SparkConf sparkConf = createSparkConf(sparkConfMap);
+        if (sparkConfMap.containsKey(TemplateConf.APP_NAME)){
+            sparkConf.setAppName(sparkConfMap.get(TemplateConf.APP_NAME).toString());
+        }
+        if (sparkConfMap.containsKey(TemplateConf.MASTER)){
+            sparkConf.setMaster(sparkConfMap.get(TemplateConf.MASTER).toString());
+        }
+        if (sparkConfMap.containsKey(TemplateConf.KRYO_CLASSES)){
+            sparkConf.registerKryoClasses((Class<?>[]) sparkConfMap.get(TemplateConf.KRYO_CLASSES));
+        }
+        Duration duration = sparkConfMap.containsKey(TemplateConf.DURATION)?(Duration) sparkConfMap.get(TemplateConf.DURATION) :Durations.seconds(10);
+        this.javaStreamingContext = new JavaStreamingContext(sparkConf, duration);
+        this.kafkaConfMap = defaultKafkaConf(kafkaConfMap);
+    }
+
+    /**
+     * 构造函数，和create功能一样
+     * @param javaStreamingContext 已初始化的javaStreamingContext
+     * @param kafkaConfMap
+     */
+    protected SparkStreamingKafka(JavaStreamingContext javaStreamingContext, Map<String,Object> kafkaConfMap) {
+        this.javaStreamingContext = javaStreamingContext;
+        this.sparkConf = javaStreamingContext.sparkContext().getConf();
+        this.kafkaConfMap = kafkaConfMap;
+    }
     /**
      * 模板初始化函数
      * 传入外部初始化好的JavaStreamingContext，
@@ -88,7 +122,7 @@ public class SparkStreamingKafka {
      *  2. spark.streaming.kafka.maxRatePerPartition：spark从kafka的每个分区每秒取出的数据条数
      * @param javaStreamingContext 已初始化的javaStreamingContext
      */
-    public SparkStreamingKafka create(JavaStreamingContext javaStreamingContext,Map<String,Object> kafkaConfMap){
+    public static SparkStreamingKafka create(JavaStreamingContext javaStreamingContext,Map<String,Object> kafkaConfMap){
         SparkStreamingKafka sparkStreamingKafka = new SparkStreamingKafka();
         sparkStreamingKafka.javaStreamingContext = javaStreamingContext;
         sparkStreamingKafka.sparkConf = javaStreamingContext.sparkContext().getConf();
@@ -196,17 +230,25 @@ public class SparkStreamingKafka {
         return sparkConf;
     }
 
-    private void work() throws Exception {
+    /**
+     * 处理kafka数据，调用RDDHandler接口
+     * @throws Exception
+     */
+    protected void work() throws Exception {
 
         // 根据 Kafka配置以及 sc对象生成 Streaming对象
         JavaInputDStream<ConsumerRecord<String, String>> stream = this.getStreaming();
 
         stream.foreachRDD(line->{
-            line.persist(StorageLevel.MEMORY_AND_DISK_SER_2());
+            if(handlers.size()>1){
+                line.persist(StorageLevel.MEMORY_AND_DISK_SER_2());
+            }
             for (RDDHandler rddHandler : handlers) {
                 rddHandler.process(line);
             }
-            line.unpersist();
+            if(handlers.size()>1){
+                line.unpersist();
+            }
         });
         offsetTemplate.updateOffset(stream,topicName,groupId);
     }
@@ -214,7 +256,7 @@ public class SparkStreamingKafka {
     /**
      * 根据StreamingContext以及Kafka配置生成DStream
      */
-    private JavaInputDStream<ConsumerRecord<String, String>> getStreaming() throws Exception {
+    protected JavaInputDStream<ConsumerRecord<String, String>> getStreaming() throws Exception {
         Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
 
         fromOffsets = offsetTemplate.getOffset(topicName,groupId);
