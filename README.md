@@ -24,8 +24,11 @@
 
 ##  2. <a name=''></a>计划功能 
 + [x] Spark Streaming Kafka offset in zk
-+ [ ] Spark Streaming Kafka offset in mysql
-+ [ ] Spark Streaming Kafka offset in kafka
++ [x] Spark Streaming Kafka offset in mysql
++ [x] Spark Streaming Kafka offset in kafka
++ [x] Spark State Streaming Kafka offset in zk
++ [x] Spark State Streaming Kafka offset in mysql
++ [x] Spark State Streaming Kafka offset in kafka
 + [ ] SparkSql to Hive
 + [ ] SparkSql to Mysql/TiDB
 + [ ] Spark to HBase
