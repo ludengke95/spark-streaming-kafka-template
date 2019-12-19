@@ -21,50 +21,50 @@ import java.util.Map;
  **/
 public class OffsetInMysqlTemplate implements OffsetTemplate, Serializable {
 
-    /**
-     * offset 所需要的table的名称
-     */
-    private String offsetTableName;
+	/**
+	 * offset 所需要的table的名称
+	 */
+	private String offsetTableName;
 
-    public OffsetInMysqlTemplate(String offsetTableName) {
-        this.offsetTableName = offsetTableName;
-    }
+	public OffsetInMysqlTemplate(String offsetTableName) {
+		this.offsetTableName = offsetTableName;
+	}
 
-    /**
-     * 从指定位置获取offset
-     *
-     * @return offset集
-     */
-    @Override
-    public Map<TopicPartition, Long> getOffset(String topicName,String groupId) throws Exception {
-        Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
-        List<Entity> offsets = Db.use().find(Arrays.asList(new String[]{"topic","partition","offset"}),Entity.create(offsetTableName).set("topic", topicName).set("group_id",groupId));
-        offsets.forEach(entity -> {
-            StaticLog.info("FOUND OFFSET IN MYSQL, USE [ topic : {} ,partition : {} ,offset : {} ]",
-                    entity.getStr("topic"),entity.getInt("partition"),entity.getInt("offset"));
-            fromOffsets.put(new TopicPartition(entity.getStr("topic"), entity.getInt("partition")), entity.getLong("offset"));
-        });
-        return fromOffsets;
-    }
+	/**
+	 * 从指定位置获取offset
+	 *
+	 * @return offset集
+	 */
+	@Override
+	public Map<TopicPartition, Long> getOffset(String topicName, String groupId) throws Exception {
+		Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
+		List<Entity> offsets = Db.use().find(Arrays.asList("topic", "partition", "offset"), Entity.create(offsetTableName).set("topic", topicName).set("group_id", groupId));
+		offsets.forEach(entity -> {
+			StaticLog.info("FOUND OFFSET IN MYSQL, USE [ topic : {} ,partition : {} ,offset : {} ]",
+					entity.getStr("topic"), entity.getInt("partition"), entity.getInt("offset"));
+			fromOffsets.put(new TopicPartition(entity.getStr("topic"), entity.getInt("partition")), entity.getLong("offset"));
+		});
+		return fromOffsets;
+	}
 
-    /**
-     * 更新offset
-     *
-     * @param stream kafka流
-     */
-    @Override
-    public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream,String topicName,String groupId) throws Exception{
-        stream.foreachRDD(rdd -> {
-            OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
-            for (OffsetRange o : offsetRanges) {
-                Db.use().insertOrUpdate(Entity.create(offsetTableName)
-                        .set("topic",topicName)
-                        .set("partition",o.partition())
-                        .set("offset",o.untilOffset())
-                        .set("group_id",groupId),"topic","group_id","partition");
-                StaticLog.info("UPDATE OFFSET TO MYSQL WITH [ topic : {} ,partition : {} ,offset: {} ~ {} ]",
-                        o.topic(),o.partition(),o.fromOffset(),o.untilOffset());
-            }
-        });
-    }
+	/**
+	 * 更新offset
+	 *
+	 * @param stream kafka流
+	 */
+	@Override
+	public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream, String topicName, String groupId) throws Exception {
+		stream.foreachRDD(rdd -> {
+			OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
+			for (OffsetRange o : offsetRanges) {
+				Db.use().insertOrUpdate(Entity.create(offsetTableName)
+						.set("topic", topicName)
+						.set("partition", o.partition())
+						.set("offset", o.untilOffset())
+						.set("group_id", groupId), "topic", "group_id", "partition");
+				StaticLog.info("UPDATE OFFSET TO MYSQL WITH [ topic : {} ,partition : {} ,offset: {} ~ {} ]",
+						o.topic(), o.partition(), o.fromOffset(), o.untilOffset());
+			}
+		});
+	}
 }

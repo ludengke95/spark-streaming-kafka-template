@@ -1,7 +1,7 @@
 package com.opensharing.bigdata.template.streamingkafka;
 
 import cn.hutool.log.StaticLog;
-import com.opensharing.bigdata.conf.ZkConf;
+import com.opensharing.bigdata.conf.ZkConfEnum;
 import com.opensharing.bigdata.toolfactory.ZookeeperFactory;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -20,62 +20,62 @@ import java.util.Map;
  **/
 public class OffsetInZookeeperTemplate implements OffsetTemplate, Serializable {
 
-    /**
-     * 路径位置
-     * 到group_id的上一级
-     * eg: /kafka/consumer/group_id/topic/partition 仅需要填写/kafka/consumer
-     */
-    private String offsetDir = "";
+	/**
+	 * 路径位置
+	 * 到group_id的上一级
+	 * eg: /kafka/consumer/group_id/topic/partition 仅需要填写/kafka/consumer
+	 */
+	private String offsetDir = "";
 
-    public OffsetInZookeeperTemplate(Map<ZkConf,Object> map, String offsetDir) {
-        this.offsetDir = offsetDir;
-        ZookeeperFactory.init(map);
-    }
+	public OffsetInZookeeperTemplate(Map<ZkConfEnum, Object> map, String offsetDir) {
+		this.offsetDir = offsetDir;
+		ZookeeperFactory.init(map);
+	}
 
-    /**
-     * 从指定位置获取offset
-     *
-     * @return offset集
-     */
-    @Override
-    public Map<TopicPartition, Long> getOffset(String topicName,String groupId) throws Exception{
-        String path = String.join("/",offsetDir,groupId,topicName);
-        Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
-        if (!ZookeeperFactory.getZkClient().exists(path)) {
-            ZookeeperFactory.getZkClient().createPersistent(path, true);
-        }
-        List<String> children = ZookeeperFactory.getZkClient().getChildren(path);
-        if (children != null && !children.isEmpty()) {
-            // 可以读取到存在Zookeeper中的偏移量 使用读取到的偏移量创建Streaming来读取Kafka
-            for (String child : children) {
-                long offset = Long.valueOf(ZookeeperFactory.getZkClient().readData(String.join("/", path, child)));
-                fromOffsets.put(new TopicPartition(topicName, Integer.valueOf(child)), offset);
-                StaticLog.info("FOUND OFFSET IN ZOOKEEPER, USE [topic : {} ,partition : {} ,offset : {} ]",
-                        topicName,child,offset);
-            }
-        }
-        return fromOffsets;
-    }
+	/**
+	 * 从指定位置获取offset
+	 *
+	 * @return offset集
+	 */
+	@Override
+	public Map<TopicPartition, Long> getOffset(String topicName, String groupId) throws Exception {
+		String path = String.join("/", offsetDir, groupId, topicName);
+		Map<TopicPartition, Long> fromOffsets = new HashMap<>(16);
+		if (!ZookeeperFactory.getZkClient().exists(path)) {
+			ZookeeperFactory.getZkClient().createPersistent(path, true);
+		}
+		List<String> children = ZookeeperFactory.getZkClient().getChildren(path);
+		if (children != null && !children.isEmpty()) {
+			// 可以读取到存在Zookeeper中的偏移量 使用读取到的偏移量创建Streaming来读取Kafka
+			for (String child : children) {
+				long offset = Long.valueOf(ZookeeperFactory.getZkClient().readData(String.join("/", path, child)));
+				fromOffsets.put(new TopicPartition(topicName, Integer.valueOf(child)), offset);
+				StaticLog.info("FOUND OFFSET IN ZOOKEEPER, USE [topic : {} ,partition : {} ,offset : {} ]",
+						topicName, child, offset);
+			}
+		}
+		return fromOffsets;
+	}
 
-    /**
-     * 更新offset
-     *
-     * @param stream kafka流
-     */
-    @Override
-    public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream,String topicName,String groupId) throws Exception{
-        String path = String.join("/",offsetDir,groupId,topicName);
-        stream.foreachRDD(rdd -> {
-            OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
-            for (OffsetRange o : offsetRanges) {
-                ZookeeperFactory.getZkUtils().updatePersistentPath(
-                        String.join("/", path, String.valueOf(o.partition())),
-                        String.valueOf(o.untilOffset()),
-                        ZookeeperFactory.getZkUtils().defaultAcls(String.join("/", offsetDir, String.valueOf(o.partition())))
-                );
-                StaticLog.info("UPDATE OFFSET TO ZOOKEEPER WITH [ topic : {} ,partition : {} ,offset: {} ~ {} ]",
-                        o.topic(),o.partition(),o.fromOffset(),o.untilOffset());
-            }
-        });
-    }
+	/**
+	 * 更新offset
+	 *
+	 * @param stream kafka流
+	 */
+	@Override
+	public void updateOffset(JavaInputDStream<ConsumerRecord<String, String>> stream, String topicName, String groupId) throws Exception {
+		String path = String.join("/", offsetDir, groupId, topicName);
+		stream.foreachRDD(rdd -> {
+			OffsetRange[] offsetRanges = ((HasOffsetRanges) rdd.rdd()).offsetRanges();
+			for (OffsetRange o : offsetRanges) {
+				ZookeeperFactory.getZkUtils().updatePersistentPath(
+						String.join("/", path, String.valueOf(o.partition())),
+						String.valueOf(o.untilOffset()),
+						ZookeeperFactory.getZkUtils().defaultAcls(String.join("/", offsetDir, String.valueOf(o.partition())))
+				);
+				StaticLog.info("UPDATE OFFSET TO ZOOKEEPER WITH [ topic : {} ,partition : {} ,offset: {} ~ {} ]",
+						o.topic(), o.partition(), o.fromOffset(), o.untilOffset());
+			}
+		});
+	}
 }

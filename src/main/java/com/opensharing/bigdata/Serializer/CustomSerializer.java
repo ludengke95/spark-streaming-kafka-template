@@ -11,32 +11,32 @@ import java.io.UnsupportedEncodingException;
  */
 public class CustomSerializer implements ZkSerializer {
 
-    private String charset = "UTF-8";
+	private String charset = "UTF-8";
 
-    public CustomSerializer() {
-    }
+	public CustomSerializer() {
+	}
 
-    public CustomSerializer(String charset) {
-        this.charset = charset;
-    }
+	public CustomSerializer(String charset) {
+		this.charset = charset;
+	}
 
-    @Override
-    public byte[] serialize(Object data) throws ZkMarshallingError {
-        try {
-            return String.valueOf(data).getBytes(charset);
-        } catch (UnsupportedEncodingException e) {
-            throw new ZkMarshallingError("Wrong Charset:" + charset);
-        }
-    }
+	@Override
+	public byte[] serialize(Object data) throws ZkMarshallingError {
+		try {
+			return String.valueOf(data).getBytes(charset);
+		} catch (UnsupportedEncodingException e) {
+			throw new ZkMarshallingError("Wrong Charset:" + charset);
+		}
+	}
 
-    @Override
-    public Object deserialize(byte[] bytes) throws ZkMarshallingError {
-        String result;
-        try {
-            result = new String(bytes, charset);
-        } catch (UnsupportedEncodingException e) {
-            throw new ZkMarshallingError("Wrong Charset:" + charset);
-        }
-        return result;
-    }
+	@Override
+	public Object deserialize(byte[] bytes) throws ZkMarshallingError {
+		String result;
+		try {
+			result = new String(bytes, charset);
+		} catch (UnsupportedEncodingException e) {
+			throw new ZkMarshallingError("Wrong Charset:" + charset);
+		}
+		return result;
+	}
 }
