@@ -36,7 +36,7 @@
 
 ##  3. <a name='-1'></a>项目说明 
 1. 现在仅仅开发了Spark Streaming Kafka offset in zk,可以查看test样例。
-2. 项目gitbook [spark-template-gitbook](https://github.com/ludengke95/spark-template-gitbook)
+2. [spark-template文档](http://106.12.51.176/spark_streaming/)
 
 ##  4. <a name='-1'></a>感谢一下开源项目 
 + @[code4craft/webmagic](https://github.com/code4craft/webmagic)：十分感谢webmegic，其实这个项目的一些想法也是源于这个项目，可以看出作者逻辑十分清晰，代码扩展也很简单，希望spark-template也能够像webmagic一样简单，简化更多人的spark开发。
