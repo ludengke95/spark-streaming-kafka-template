@@ -1,17 +1,11 @@
 # spark-template #
 
-<!-- vscode-markdown-toc -->
+
 * [为何会产生一个名叫spark-template的轮子(现在估计连轮子都算不上，加油！！！)](#spark-template)
-* [计划功能](#)
+* [计划功能](#-1)
 * [项目说明](#-1)
 * [感谢一下开源项目](#-1)
 * [后言](#-1)
-
-<!-- vscode-markdown-toc-config
-	numbering=true
-	autoSave=true
-	/vscode-markdown-toc-config -->
-<!-- /vscode-markdown-toc -->
 
 ##  1. <a name='spark-template'></a>为何会产生一个名叫spark-template的轮子(现在估计连轮子都算不上，加油！！！) 
 
@@ -22,7 +16,7 @@
 
 这个项目的初衷就是为了简化 Spark 对接其他组件（尤其是 Kafka，对新手贼不友好）。
 
-##  2. <a name=''></a>计划功能 
+##  2. <a name='-1'></a>计划功能 
 + [x] Spark Streaming Kafka offset in zk
 + [x] Spark Streaming Kafka offset in mysql
 + [x] Spark Streaming Kafka offset in kafka
