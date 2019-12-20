@@ -18,6 +18,8 @@ import java.util.Map;
  * 如果暴力终止的话，checkpoint可能还未保存
  * 再次启动，会出现重复消费部分数据
  * <p>
+ * 如果启用Hive支持，需要在调用start之前，启用Hive
+ * <p>
  * 千万不要暴力终止，会出现重复消费数据。
  *
  * @author ludengke

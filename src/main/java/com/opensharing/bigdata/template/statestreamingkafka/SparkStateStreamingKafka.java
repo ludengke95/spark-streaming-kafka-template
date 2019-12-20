@@ -105,7 +105,7 @@ public class SparkStateStreamingKafka<K, V> extends SparkStreamingKafka implemen
 				line.persist(StorageLevel.MEMORY_AND_DISK_SER_2());
 			}
 			for (PairRDDHandlerInter<K, V> handler : handlers) {
-				handler.process(line);
+				handler.process(sparkSession, line);
 			}
 			if (handlers.size() > 1) {
 				line.unpersist();

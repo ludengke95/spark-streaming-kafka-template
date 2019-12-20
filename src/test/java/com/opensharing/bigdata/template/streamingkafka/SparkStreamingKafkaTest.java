@@ -14,6 +14,8 @@ import java.util.Map;
  * 手动维护偏移量最好不要启用checkpoint，
  * 如果暴力终止的话，checkpoint可能还未保存
  * 再次启动，会出现重复消费部分数据
+ * <p>
+ * 如果启用Hive支持，需要在调用start之前，启用Hive
  *
  * @author ludengke
  * @date 2019/12/16
@@ -42,6 +44,7 @@ public class SparkStreamingKafkaTest {
 		zkConfMap.put(ZkConfEnum.CONNECTION_TIMEOUT, "3000");
 		SparkStreamingKafka spark = SparkStreamingKafka.create(sparkConfMap, kafkaConfMap);
 //        SparkStreamingKafka spark = SparkStreamingKafka.create(sparkConfMap, kafkaConfMap,"./checkpointStreamingZk");
+		spark.startHiveSupport();
 		spark.setTopicName(topic);
 		spark.setOffsetTemplate(new OffsetInZookeeperTemplate(zkConfMap, "/ldk"));
 		spark.start();

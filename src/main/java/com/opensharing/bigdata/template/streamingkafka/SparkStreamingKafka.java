@@ -11,6 +11,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.SparkConf;
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.Durations;
@@ -37,6 +38,11 @@ public class SparkStreamingKafka implements Serializable {
 	 * 因为不能序列化，只能通过static修饰
 	 */
 	protected static JavaStreamingContext javaStreamingContext;
+
+	/**
+	 * SparkSession，用于连接Hive执行HiveSQL
+	 */
+	protected static SparkSession sparkSession;
 
 	/**
 	 * kafka配置
@@ -86,7 +92,12 @@ public class SparkStreamingKafka implements Serializable {
 	/**
 	 * SparkConf:spark应用的配置类
 	 */
-	private SparkConf sparkConf;
+	protected SparkConf sparkConf;
+
+	/**
+	 * 是否启用hive支持，默认不启用
+	 */
+	protected Boolean hiveSupport = Boolean.FALSE;
 
 	/**
 	 * kafka数据流处理实现类组
@@ -268,12 +279,18 @@ public class SparkStreamingKafka implements Serializable {
 				if (!StrUtil.isEmpty(checkPointPath)) {
 					javaStreamingContext = JavaStreamingContext.getOrCreate(checkPointPath, () -> {
 						javaStreamingContext = new JavaStreamingContext(sparkConf, duration);
+						if (this.hiveSupport) {
+							sparkSession = SparkSession.builder().config(sparkConf).enableHiveSupport().getOrCreate();
+						}
 						javaStreamingContext.checkpoint(checkPointPath);
 						work();
 						return javaStreamingContext;
 					});
 				} else {
 					javaStreamingContext = new JavaStreamingContext(sparkConf, duration);
+					if (this.hiveSupport) {
+						sparkSession = SparkSession.builder().config(sparkConf).enableHiveSupport().getOrCreate();
+					}
 					this.work();
 				}
 			}
@@ -321,7 +338,7 @@ public class SparkStreamingKafka implements Serializable {
 				line.persist(StorageLevel.MEMORY_AND_DISK_SER_2());
 			}
 			for (KafkaRDDHandlerImpl rddHandler : handlers) {
-				rddHandler.process(line);
+				rddHandler.process(sparkSession, line);
 			}
 			if (handlers.size() > 1) {
 				line.unpersist();
@@ -360,6 +377,10 @@ public class SparkStreamingKafka implements Serializable {
 					ConsumerStrategies.Subscribe(Collections.singleton(topicName), kafkaConfMap)
 			);
 		}
+	}
+
+	public void startHiveSupport() {
+		this.hiveSupport = Boolean.TRUE;
 	}
 
 	public void addHandler(KafkaRDDHandlerImpl rddHandler) {
