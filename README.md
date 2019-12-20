@@ -21,7 +21,7 @@
 + [x] Spark State Streaming Kafka Offset in Zookeeper
 + [x] Spark State Streaming Kafka Offset in Mysql
 + [x] Spark State Streaming Kafka Offset in Kafka
-+ [ ] Spark Streaming Kafka Export to Hive
++ [x] Spark Streaming Kafka Export to Hive
 
 ##  3. <a name='-1'></a>文档说明 
 1. [spark-streaming-kafka-template 文档](http://106.12.51.176)
