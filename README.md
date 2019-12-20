@@ -1,17 +1,10 @@
 # spark-template #
 
-<!-- vscode-markdown-toc -->
 * [为何会产生一个名叫spark-template的轮子(现在估计连轮子都算不上，加油！！！)](#spark-template)
-* [计划功能](#)
+* [计划功能](#-1)
 * [项目说明](#-1)
 * [感谢一下开源项目](#-1)
 * [后言](#-1)
-
-<!-- vscode-markdown-toc-config
-	numbering=true
-	autoSave=true
-	/vscode-markdown-toc-config -->
-<!-- /vscode-markdown-toc -->
 
 ##  1. <a name='spark-template'></a>为何会产生一个名叫spark-template的轮子(现在估计连轮子都算不上，加油！！！) 
 
@@ -20,9 +13,10 @@
 + 仅仅是想用 SparkSql 进行数据的统计，结果写入到 Hive 或者关系型数据库，分布式事务怎么办。
 + spark-template 就是为了解决诸如此类的问题应运而生的，希望能够帮助你简化开发。
 
-这个项目的初衷就是为了简化 Spark 对接其他组件（尤其是 Kafka，对新手贼不友好）。
+这个项目的初衷就是为了简化 Spark 对接其他组件（尤其是 Kafka，对新手贼不友好）。  
+至于这个轮子圆不圆，走不走的远就要靠实践来检验了呀。
 
-##  2. <a name=''></a>计划功能 
+##  2. <a name='-1'></a>计划功能 
 + [x] Spark Streaming Kafka offset in zk
 + [x] Spark Streaming Kafka offset in mysql
 + [x] Spark Streaming Kafka offset in kafka
