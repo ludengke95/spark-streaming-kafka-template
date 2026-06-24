@@ -21,7 +21,7 @@
         <zk.client.version>0.10</zk.client.version>
         <mysql.version>8.0.28</mysql.version>
         <dbutils.version>1.7</dbutils.version>
-        <hutools.version>5.0.6</hutools.version>
+        <hutools.version>5.8.21</hutools.version>
     </properties>
 
     <dependencies>
