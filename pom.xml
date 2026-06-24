@@ -16,7 +16,7 @@
         <yarn.version>${hadoop.version}</yarn.version>
         <scala.binary.version>2.11</scala.binary.version>
         <zookeeper.version>3.4.6</zookeeper.version>
-        <kafka.version>2.1.1</kafka.version>
+        <kafka.version>3.9.2</kafka.version>
         <spark.version>2.3.0</spark.version>
         <zk.client.version>0.10</zk.client.version>
         <mysql.version>8.0.28</mysql.version>
